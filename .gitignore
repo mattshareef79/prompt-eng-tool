@@ -1,0 +1,21 @@
+# Secrets — never commit these
+.env
+token.json
+credentials.json
+
+# Streamlit secrets (local only — add secrets via Streamlit Cloud dashboard instead)
+.streamlit/secrets.toml
+
+# Temporary/generated files
+.tmp/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
