@@ -21,15 +21,123 @@ st.set_page_config(
     layout="centered",
 )
 
-st.markdown(
-    """
-    <style>
-    .block-container { max-width: 780px; padding-top: 2rem; }
-    .stProgress > div > div { border-radius: 4px; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<style>
+/* ── Base ──────────────────────────────── */
+.stApp { background: #f5f6ff; }
+.block-container { max-width: 820px; padding-top: 0.5rem; padding-bottom: 3rem; }
+
+/* ── Hero banner ───────────────────────── */
+.hero {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 16px;
+    padding: 2rem 2.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 8px 32px rgba(102,126,234,0.28);
+}
+.hero h1 {
+    color: white; font-size: 1.9rem; font-weight: 800;
+    margin: 0 0 0.4rem 0; letter-spacing: -0.02em;
+}
+.hero p { color: rgba(255,255,255,0.88); font-size: 0.97rem; margin: 0; line-height: 1.55; }
+.hero .step-badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.22);
+    border-radius: 20px; padding: 0.18rem 0.75rem;
+    font-size: 0.78rem; color: rgba(255,255,255,0.95);
+    margin-bottom: 0.7rem; font-weight: 600; letter-spacing: 0.02em;
+}
+
+/* ── Primary buttons ────────────────────── */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border: none !important; border-radius: 10px !important;
+    color: white !important; font-weight: 600 !important;
+    font-size: 0.95rem !important; padding: 0.6rem 1.8rem !important;
+    box-shadow: 0 4px 14px rgba(102,126,234,0.38) !important;
+    transition: all 0.18s ease !important;
+}
+.stButton > button[kind="primary"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(102,126,234,0.5) !important;
+}
+.stButton > button[kind="primary"]:active { transform: translateY(0) !important; }
+
+/* ── Secondary buttons ──────────────────── */
+.stButton > button:not([kind="primary"]) {
+    background: white !important; border: 2px solid #667eea !important;
+    border-radius: 10px !important; color: #667eea !important;
+    font-weight: 500 !important; transition: all 0.18s ease !important;
+}
+.stButton > button:not([kind="primary"]):hover {
+    background: rgba(102,126,234,0.06) !important;
+    border-color: #764ba2 !important; color: #764ba2 !important;
+}
+
+/* ── Progress bar ──────────────────────── */
+div[data-testid="stProgress"] > div {
+    background: rgba(102,126,234,0.15); border-radius: 10px; height: 8px !important;
+}
+div[data-testid="stProgress"] > div > div {
+    background: linear-gradient(90deg, #667eea, #764ba2) !important; border-radius: 10px;
+}
+
+/* ── Info / suggestion box ───────────────── */
+div[data-testid="stInfo"] {
+    background: linear-gradient(135deg, rgba(102,126,234,0.07), rgba(118,75,162,0.04)) !important;
+    border: 1px solid rgba(102,126,234,0.22) !important;
+    border-left: 4px solid #667eea !important;
+    border-radius: 10px !important;
+}
+
+/* ── Text areas ─────────────────────────── */
+.stTextArea textarea {
+    border-radius: 10px !important; border: 2px solid #e8eaf6 !important;
+    font-size: 0.95rem !important; line-height: 1.55 !important;
+    transition: all 0.18s !important; color: #1a1a2e !important;
+}
+.stTextArea textarea:focus {
+    border-color: #667eea !important;
+    box-shadow: 0 0 0 3px rgba(102,126,234,0.12) !important;
+}
+
+/* ── Selectbox ─────────────────────────── */
+.stSelectbox > div > div > div {
+    border-radius: 10px !important; border: 2px solid #e8eaf6 !important;
+    background: white !important;
+}
+
+/* ── Code block (result) ─────────────────── */
+[data-testid="stCodeBlock"] {
+    border-radius: 14px !important;
+    border: 2px solid rgba(102,126,234,0.18) !important;
+    box-shadow: 0 4px 20px rgba(102,126,234,0.09) !important;
+}
+
+/* ── Expanders ──────────────────────────── */
+details {
+    border-radius: 10px !important;
+    border: 1px solid rgba(102,126,234,0.15) !important;
+    background: white !important; margin-top: 0.5rem !important;
+}
+summary { color: #667eea !important; font-weight: 500 !important; }
+
+/* ── Dividers ───────────────────────────── */
+hr {
+    border: none !important; height: 1px !important;
+    background: linear-gradient(90deg, rgba(102,126,234,0.3), rgba(118,75,162,0.08), transparent) !important;
+    margin: 1.5rem 0 !important;
+}
+
+/* ── Caption ────────────────────────────── */
+.stCaption { color: #6b7280 !important; }
+
+/* ── Scrollbar ──────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #667eea; border-radius: 3px; }
+</style>
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Session state
@@ -103,18 +211,28 @@ def _reset():
 
 _init_state()
 
+
+def _hero(title: str, subtitle: str, badge: str = ""):
+    """Render a gradient hero banner replacing st.title()."""
+    badge_html = f'<div class="step-badge">{badge}</div>' if badge else ""
+    st.markdown(
+        f'<div class="hero">{badge_html}<h1>{title}</h1><p>{subtitle}</p></div>',
+        unsafe_allow_html=True,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Stage 1 — Input
 # ---------------------------------------------------------------------------
 
 
 def render_input():
-    st.title("✦ Prompt Enhancement Tool")
-    st.caption(
+    _hero(
+        "✦ Prompt Enhancement Tool",
         "Enter your rough prompt, choose your target LLM, and we'll restructure "
-        "it using that model's proven prompt engineering framework."
+        "it using that model's proven prompt engineering framework.",
+        badge="Step 1 of 4 · Enter Prompt",
     )
-    st.divider()
 
     target_llm = st.selectbox(
         "Target LLM",
@@ -172,7 +290,12 @@ _COMPONENT_ICONS = {
 
 
 def render_analysis():
-    st.title("Prompt Analysis")
+    _hero(
+        "Prompt Analysis",
+        "We've scanned your prompt against the framework for your chosen LLM. "
+        "Review what's present and decide how to proceed.",
+        badge="Step 2 of 4 · Analysis",
+    )
 
     # Run analysis once and cache in session state
     if not st.session_state.components:
@@ -340,7 +463,11 @@ def render_questions():
         .get(q["component"], q["component"].replace("_", " ").title())
     )
 
-    st.title("Let's fill in the gaps")
+    _hero(
+        "Let's fill in the gaps",
+        f"Answering these questions helps us build the strongest possible prompt for {st.session_state.target_llm}.",
+        badge=f"Step 3 of 4 · Question {idx + 1} of {total}",
+    )
     st.progress((idx) / total, text=f"Question {idx + 1} of {total}")
     st.divider()
 
@@ -350,15 +477,18 @@ def render_questions():
 
     # Inferred suggestion box
     if q.get("inferred_example"):
-        st.info(f"💡 **Based on your prompt, we think:**\n\n{q['inferred_example']}")
+        st.info(f"💡 **Based on your prompt, we suggest:**\n\n{q['inferred_example']}")
 
         use_col, _ = st.columns([1, 3])
         with use_col:
-            if st.button("Use this suggestion", key=f"use_{idx}"):
-                st.session_state.draft = q["inferred_example"]
+            if st.button("✓ Accept & Continue →", key=f"use_{idx}", type="primary"):
+                # Save suggestion as the answer and auto-advance to next question
+                st.session_state.answers[q["component"]] = q["inferred_example"]
+                st.session_state.current_q += 1
+                st.session_state.draft = ""
                 st.rerun()
 
-    st.markdown("**Or write your own:**")
+    st.markdown("**Or write your own answer below:**")
     answer = st.text_area(
         "Your answer",
         value=st.session_state.draft,
@@ -396,12 +526,12 @@ def render_questions():
 
 
 def render_result():
-    st.title("Your Enhanced Prompt")
-    st.caption(
-        f"Optimized for **{st.session_state.target_llm}** · "
-        "Click the copy icon in the top-right of the box below."
+    _hero(
+        "Your Enhanced Prompt",
+        f"Optimized for {st.session_state.target_llm} · "
+        "Click the copy icon in the top-right corner of the box below to copy.",
+        badge="Step 4 of 4 · Done ✦",
     )
-    st.divider()
 
     enhanced = st.session_state.enhanced_prompt
 

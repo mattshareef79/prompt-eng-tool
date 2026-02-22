@@ -147,7 +147,17 @@ Avoid asking about components: {present_components}
 
 For each question you generate, also infer the most likely answer from the raw prompt \
 context — even if it's not stated explicitly. This inferred answer will be shown to \
-the user as a suggestion they can accept or edit.
+the user as a ready-to-use suggestion they can accept with one click.
+
+CRITICAL: The inferred_example MUST be detailed and specific — 5 to 6 lines minimum. \
+Write it as if a domain expert is filling out the answer. Do NOT write one-liners or \
+vague summaries. A good inferred_example includes:
+- Specific details, numbers, names, or qualifiers drawn from the prompt context
+- Concrete scenarios or use cases relevant to the user's actual goal
+- Nuances that matter specifically for {llm} (e.g. tone calibration, format cues)
+- Any audience, constraint, or output preference you can reasonably infer
+- Phrasing that is immediately usable as-is — the user should be able to accept it \
+with one click and get a meaningfully better prompt result.
 
 Return ONLY valid JSON — no markdown, no explanation. Schema:
 [
