@@ -101,48 +101,6 @@ div[data-testid="stInfo"] {
     box-shadow: 0 0 0 3px rgba(102,126,234,0.12) !important;
 }
 
-/* ── LLM selector — official logos as button background images ── */
-/* Base padding for all four LLM buttons */
-button[aria-label="Claude"],
-button[aria-label="ChatGPT"],
-button[aria-label="Gemini"],
-button[aria-label="Perplexity"] {
-    padding-left: 40px !important;
-    background-repeat: no-repeat !important;
-    background-position: 12px center !important;
-    background-size: 20px 20px, auto !important;
-}
-/* Unselected: brand-colored logo on white */
-button:not([kind="primary"])[aria-label="Claude"] {
-    background-image: url('https://cdn.simpleicons.org/anthropic/CC785C') !important;
-}
-button:not([kind="primary"])[aria-label="ChatGPT"] {
-    background-image: url('https://cdn.simpleicons.org/openai/10A37F') !important;
-}
-button:not([kind="primary"])[aria-label="Gemini"] {
-    background-image: url('https://cdn.simpleicons.org/googlegemini/8E75B2') !important;
-}
-button:not([kind="primary"])[aria-label="Perplexity"] {
-    background-image: url('https://cdn.simpleicons.org/perplexity/5436DA') !important;
-}
-/* Selected (primary): white logo layered over gradient */
-button[kind="primary"][aria-label="Claude"] {
-    background: url('https://cdn.simpleicons.org/anthropic/ffffff') no-repeat 12px center / 20px 20px,
-                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-}
-button[kind="primary"][aria-label="ChatGPT"] {
-    background: url('https://cdn.simpleicons.org/openai/ffffff') no-repeat 12px center / 20px 20px,
-                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-}
-button[kind="primary"][aria-label="Gemini"] {
-    background: url('https://cdn.simpleicons.org/googlegemini/ffffff') no-repeat 12px center / 20px 20px,
-                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-}
-button[kind="primary"][aria-label="Perplexity"] {
-    background: url('https://cdn.simpleicons.org/perplexity/ffffff') no-repeat 12px center / 20px 20px,
-                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-}
-
 /* ── Code block (result) ─────────────────── */
 [data-testid="stCodeBlock"] {
     border-radius: 14px !important;
@@ -192,21 +150,7 @@ _DEFAULTS = {
     "use_suggestion": False,
     "last_request_time": 0,   # unix timestamp of last API call (rate limiting)
     "request_count": 0,       # total API calls this session
-    "output_format": "(No preference)",
-    "output_format_details": "",
 }
-
-_OUTPUT_FORMAT_OPTIONS = [
-    "(No preference)",
-    "Prose / Essay",
-    "Bullet List",
-    "Table / Spreadsheet",
-    "Report with sections (PDF-style)",
-    "Code snippet",
-    "Step-by-step Guide",
-    "Email / Document",
-    "Chart / Visual description",
-]
 
 # Input limits — prevent runaway token costs from oversized inputs
 _MAX_PROMPT_CHARS = 6000   # ~1,500 tokens
@@ -215,6 +159,26 @@ _MAX_ANSWER_CHARS = 1000   # per clarifying question answer
 # Rate limiting — per session (not per IP; use a reverse proxy for IP-level limiting)
 _MIN_SECONDS_BETWEEN_REQUESTS = 10  # seconds between full enhancement runs
 _MAX_REQUESTS_PER_SESSION = 20      # hard cap per browser session
+
+# Fixed output-format question — always prepended to the Q&A flow regardless of LLM
+_OUTPUT_FORMAT_QUESTION = {
+    "component": "desired_output_format",
+    "question": "What format would you like the final output in?",
+    "inferred_example": (
+        "A well-structured written report organised into the following sections:\n"
+        "• Executive Summary (2–3 sentences capturing the single most important takeaway)\n"
+        "• Main Body divided into clearly labelled sections, each with 2–4 bullet points "
+        "followed by a short explanatory paragraph\n"
+        "• A Quick-Reference Table at the end (columns: Topic | Key Finding | Recommended Action)\n"
+        "• Conclusion with 3–5 concrete, actionable next steps\n\n"
+        "Tone: professional yet approachable — suitable for a non-technical stakeholder audience.\n"
+        "Length: 800–1,200 words. Avoid jargon. Use plain language throughout."
+    ),
+    "placeholder": (
+        "e.g., A 2-page bullet summary · A 10-column spreadsheet · "
+        "A step-by-step tutorial · A formal PDF-style report with sections"
+    ),
+}
 
 
 def _check_rate_limit() -> str | None:
@@ -259,16 +223,6 @@ def _reset():
     _init_state()
 
 
-def _get_answers_with_format() -> dict:
-    """Merge user Q&A answers with the chosen output format."""
-    answers = dict(st.session_state.answers)
-    fmt = st.session_state.output_format
-    details = st.session_state.get("output_format_details", "").strip()
-    if fmt and fmt != "(No preference)":
-        answers["desired_output_format"] = fmt + (f" — {details}" if details else "")
-    return answers
-
-
 _init_state()
 
 
@@ -282,89 +236,10 @@ def _hero(title: str, subtitle: str, badge: str = ""):
 
 
 # ---------------------------------------------------------------------------
-# Stage 1 — Input
-# ---------------------------------------------------------------------------
-
-
-def render_input():
-    _hero(
-        "✦ Prompt Enhancement Tool",
-        "Enter your rough prompt, choose your target LLM, and we'll restructure "
-        "it using that model's proven prompt engineering framework.",
-        badge="Step 1 of 4 · Enter Prompt",
-    )
-
-    st.markdown("**Select your target LLM**")
-    cols = st.columns(len(LLM_PROFILES))
-    for col, llm in zip(cols, LLM_PROFILES.keys()):
-        with col:
-            is_sel = st.session_state.target_llm == llm
-            # Labels are plain LLM names so aria-label matches the CSS logo selectors
-            st.button(
-                llm,
-                key=f"llm_btn_{llm}",
-                use_container_width=True,
-                type="primary" if is_sel else "secondary",
-                on_click=_set_llm,
-                args=(llm,),
-            )
-    st.caption(f"**Style:** {LLM_PROFILES[st.session_state.target_llm]['style_hint']}")
-
-    st.divider()
-
-    st.markdown("**Desired output format**")
-    st.caption("What should the final output look like? This shapes how the prompt is structured.")
-    output_fmt = st.selectbox(
-        "Output format",
-        options=_OUTPUT_FORMAT_OPTIONS,
-        index=_OUTPUT_FORMAT_OPTIONS.index(st.session_state.output_format)
-        if st.session_state.output_format in _OUTPUT_FORMAT_OPTIONS else 0,
-        label_visibility="collapsed",
-    )
-    st.session_state.output_format = output_fmt
-    if output_fmt != "(No preference)":
-        st.text_input(
-            "Format details (optional)",
-            placeholder="e.g., 10 pages with executive summary · 5 columns: Name, Date, Status, Owner, Notes · bar chart by region",
-            label_visibility="collapsed",
-            key="output_format_details",
-        )
-
-    st.divider()
-
-    raw_prompt = st.text_area(
-        "Your raw prompt",
-        height=200,
-        placeholder=(
-            "Paste your rough prompt here — it can be a single sentence or a messy draft. "
-            "We'll analyze it and ask the right questions."
-        ),
-        value=st.session_state.raw_prompt,
-        max_chars=_MAX_PROMPT_CHARS,
-    )
-    if raw_prompt:
-        remaining = _MAX_PROMPT_CHARS - len(raw_prompt)
-        st.caption(f"{len(raw_prompt):,} / {_MAX_PROMPT_CHARS:,} characters")
-
-    if st.button("Analyze & Enhance →", type="primary", use_container_width=True):
-        if not raw_prompt.strip():
-            st.error("Please enter a prompt before continuing.")
-        else:
-            err = _check_rate_limit()
-            if err:
-                st.error(err)
-            else:
-                st.session_state.raw_prompt = raw_prompt.strip()
-                st.session_state.stage = "analysis"
-                st.session_state.components = {}   # clear any previous run
-                st.rerun()
-
-
-# ---------------------------------------------------------------------------
 # LLM brand assets + selector callback
 # ---------------------------------------------------------------------------
 
-# SimpleIcons CDN base URLs (append /<hex-color> for colored SVGs)
+# SimpleIcons CDN — append /<hex-color> for a coloured SVG
 _LLM_LOGO_BASE = {
     "Claude":     "https://cdn.simpleicons.org/anthropic",
     "ChatGPT":    "https://cdn.simpleicons.org/openai",
@@ -389,17 +264,84 @@ def _set_llm(llm: str):
 
 
 # ---------------------------------------------------------------------------
+# Stage 1 — Input
+# ---------------------------------------------------------------------------
+
+
+def render_input():
+    _hero(
+        "✦ Prompt Enhancement Tool",
+        "Enter your rough prompt, choose your target LLM, and we'll restructure "
+        "it using that model's proven prompt engineering framework.",
+        badge="Step 1 of 4 · Enter Prompt",
+    )
+
+    st.markdown("**Select your target LLM**")
+    cols = st.columns(len(LLM_PROFILES))
+    for col, llm in zip(cols, LLM_PROFILES.keys()):
+        with col:
+            is_sel = st.session_state.target_llm == llm
+            border_color = "#667eea" if is_sel else "#e0e0ef"
+            card_bg = "rgba(102,126,234,0.07)" if is_sel else "white"
+            # Official logo via HTML img tag — rendered before the button
+            st.markdown(
+                f'<div style="border:2px solid {border_color};border-radius:10px;'
+                f'background:{card_bg};padding:10px 4px 8px;text-align:center;'
+                f'margin-bottom:6px;">'
+                f'<img src="{_llm_logo_url(llm)}" height="28" alt="{llm} logo" /></div>',
+                unsafe_allow_html=True,
+            )
+            st.button(
+                llm,
+                key=f"llm_btn_{llm}",
+                use_container_width=True,
+                type="primary" if is_sel else "secondary",
+                on_click=_set_llm,
+                args=(llm,),
+            )
+    st.caption(f"**Style:** {LLM_PROFILES[st.session_state.target_llm]['style_hint']}")
+
+    st.divider()
+
+    raw_prompt = st.text_area(
+        "Your raw prompt",
+        height=200,
+        placeholder=(
+            "Paste your rough prompt here — it can be a single sentence or a messy draft. "
+            "We'll analyze it and ask the right questions."
+        ),
+        value=st.session_state.raw_prompt,
+        max_chars=_MAX_PROMPT_CHARS,
+    )
+    if raw_prompt:
+        st.caption(f"{len(raw_prompt):,} / {_MAX_PROMPT_CHARS:,} characters")
+
+    if st.button("Analyze & Enhance →", type="primary", use_container_width=True):
+        if not raw_prompt.strip():
+            st.error("Please enter a prompt before continuing.")
+        else:
+            err = _check_rate_limit()
+            if err:
+                st.error(err)
+            else:
+                st.session_state.raw_prompt = raw_prompt.strip()
+                st.session_state.stage = "analysis"
+                st.session_state.components = {}   # clear any previous run
+                st.rerun()
+
+
+# ---------------------------------------------------------------------------
 # Stage 2 — Analysis
 # ---------------------------------------------------------------------------
 
 _COMPONENT_ICONS = {
-    # generic fallbacks
     "role": "👤", "task": "🎯", "context": "🗂️", "examples": "📋",
     "output": "📄", "constraints": "🚧", "instructions": "📌",
     "persona": "👤", "objective": "🎯", "steps": "🔢", "output_format": "📄",
     "chain_of_thought": "🧠", "background": "🗂️",
     "research_question": "🔍", "time_scope": "📅", "source_types": "📚",
     "inclusions": "✅", "exclusions": "❌",
+    "desired_output_format": "🖨️",
 }
 
 
@@ -410,6 +352,12 @@ def render_analysis():
         "Review what's present and decide how to proceed.",
         badge="Step 2 of 4 · Analysis",
     )
+
+    # Back button
+    if st.button("← Back", key="back_analysis"):
+        st.session_state.stage = "input"
+        st.session_state.components = {}
+        st.rerun()
 
     # Run analysis once and cache in session state
     if not st.session_state.components:
@@ -495,7 +443,7 @@ def render_analysis():
                             st.session_state.raw_prompt,
                             st.session_state.target_llm,
                             st.session_state.components,
-                            _get_answers_with_format(),
+                            st.session_state.answers,
                         )
                         st.session_state.enhanced_prompt = enhanced
                     except Exception as e:
@@ -509,7 +457,7 @@ def render_analysis():
             "Ask me questions to improve →",
             type="primary",
             use_container_width=True,
-            help="We'll ask up to 4 targeted questions to fill the most important gaps.",
+            help="We'll ask targeted questions — including about your desired output format.",
         ):
             err = _check_rate_limit()
             if err:
@@ -526,28 +474,13 @@ def render_analysis():
                     except Exception as e:
                         st.error(_safe_api_error(e))
                         st.stop()
-                if not questions:
-                    # Nothing to ask — go straight to result
-                    with st.spinner("Building your enhanced prompt..."):
-                        try:
-                            _record_request()
-                            enhanced = build_enhanced_prompt(
-                                st.session_state.raw_prompt,
-                                st.session_state.target_llm,
-                                st.session_state.components,
-                                _get_answers_with_format(),
-                            )
-                            st.session_state.enhanced_prompt = enhanced
-                        except Exception as e:
-                            st.error(_safe_api_error(e))
-                            st.stop()
-                    st.session_state.stage = "result"
-                else:
-                    st.session_state.questions = questions
-                    st.session_state.current_q = 0
-                    st.session_state.answers = {}
-                    st.session_state.draft = ""
-                    st.session_state.stage = "questions"
+                # Always prepend the output format question first
+                all_questions = [_OUTPUT_FORMAT_QUESTION] + questions
+                st.session_state.questions = all_questions
+                st.session_state.current_q = 0
+                st.session_state.answers = {}
+                st.session_state.draft = ""
+                st.session_state.stage = "questions"
                 st.rerun()
 
     if st.button("← Start over", use_container_width=True):
@@ -574,7 +507,7 @@ def render_questions():
                     st.session_state.raw_prompt,
                     st.session_state.target_llm,
                     st.session_state.components,
-                    _get_answers_with_format(),
+                    st.session_state.answers,
                 )
                 st.session_state.enhanced_prompt = enhanced
             except Exception as e:
@@ -595,7 +528,17 @@ def render_questions():
         f"Answering these questions helps us build the strongest possible prompt for {st.session_state.target_llm}.",
         badge=f"Step 3 of 4 · Question {idx + 1} of {total}",
     )
-    st.progress((idx) / total, text=f"Question {idx + 1} of {total}")
+
+    # Back button — returns to analysis, clears Q&A state
+    if st.button("← Back", key="back_questions"):
+        st.session_state.stage = "analysis"
+        st.session_state.questions = []
+        st.session_state.answers = {}
+        st.session_state.current_q = 0
+        st.session_state.draft = ""
+        st.rerun()
+
+    st.progress(idx / total)
     st.divider()
 
     icon = _COMPONENT_ICONS.get(q["component"], "•")
@@ -661,6 +604,12 @@ def render_result():
         badge="Step 4 of 4 · Done ✦",
     )
 
+    # Back button
+    if st.button("← Back to Analysis", key="back_result"):
+        st.session_state.stage = "analysis"
+        st.session_state.enhanced_prompt = ""
+        st.rerun()
+
     enhanced = st.session_state.enhanced_prompt
 
     # st.code() has a built-in copy icon (top-right corner)
@@ -710,3 +659,20 @@ elif stage == "questions":
     render_questions()
 elif stage == "result":
     render_result()
+
+# ---------------------------------------------------------------------------
+# Footer — shown on every page
+# ---------------------------------------------------------------------------
+
+st.markdown(
+    '<div style="margin-top:3rem;padding-top:1.2rem;'
+    'border-top:1px solid rgba(102,126,234,0.18);'
+    'text-align:center;color:#9ca3af;font-size:0.8rem;line-height:2.2;">'
+    '&copy; 2026 Motasem AlShareef &nbsp;&middot;&nbsp; All rights reserved<br>'
+    'Built with&nbsp;'
+    '<img src="https://cdn.simpleicons.org/anthropic/9ca3af" height="13" '
+    'style="vertical-align:middle;margin:0 3px 2px;" alt="Claude" />'
+    '&nbsp;<strong style="color:#6b7280;">Claude Code</strong>'
+    '</div>',
+    unsafe_allow_html=True,
+)
