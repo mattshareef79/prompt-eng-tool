@@ -234,15 +234,21 @@ def render_input():
         badge="Step 1 of 4 · Enter Prompt",
     )
 
-    target_llm = st.selectbox(
-        "Target LLM",
-        options=list(LLM_PROFILES.keys()),
-        index=list(LLM_PROFILES.keys()).index(st.session_state.target_llm),
-        key="llm_select",
-    )
-    # Persist selection across reruns
-    st.session_state.target_llm = target_llm
-    st.caption(f"**Style:** {LLM_PROFILES[target_llm]['style_hint']}")
+    st.markdown("**Select your target LLM**")
+    cols = st.columns(len(LLM_PROFILES))
+    for col, llm in zip(cols, LLM_PROFILES.keys()):
+        with col:
+            is_sel = st.session_state.target_llm == llm
+            icon = _LLM_ICONS.get(llm, "🤖")
+            st.button(
+                f"{icon}  {llm}",
+                key=f"llm_btn_{llm}",
+                use_container_width=True,
+                type="primary" if is_sel else "secondary",
+                on_click=_set_llm,
+                args=(llm,),
+            )
+    st.caption(f"**Style:** {LLM_PROFILES[st.session_state.target_llm]['style_hint']}")
 
     st.divider()
 
@@ -272,6 +278,22 @@ def render_input():
                 st.session_state.stage = "analysis"
                 st.session_state.components = {}   # clear any previous run
                 st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# LLM brand icons + selector callback
+# ---------------------------------------------------------------------------
+
+_LLM_ICONS = {
+    "Claude":     "🔸",   # Anthropic — warm orange diamond
+    "ChatGPT":    "🟢",   # OpenAI — green
+    "Gemini":     "🔷",   # Google — blue
+    "Perplexity": "🔍",   # Perplexity — search
+}
+
+
+def _set_llm(llm: str):
+    st.session_state.target_llm = llm
 
 
 # ---------------------------------------------------------------------------
@@ -475,9 +497,10 @@ def render_questions():
     st.caption(f"Improving: {icon} **{component_label}**")
     st.subheader(q["question"])
 
-    # Inferred suggestion box
+    # Inferred suggestion box — st.code() gives a built-in copy icon (top-right)
     if q.get("inferred_example"):
-        st.info(f"💡 **Based on your prompt, we suggest:**\n\n{q['inferred_example']}")
+        st.markdown("💡 **Based on your prompt, we suggest** *(click the copy icon to copy, or accept below):*")
+        st.code(q["inferred_example"], language="text", wrap_lines=True)
 
         use_col, _ = st.columns([1, 3])
         with use_col:
