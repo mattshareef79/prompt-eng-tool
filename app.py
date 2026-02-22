@@ -101,10 +101,46 @@ div[data-testid="stInfo"] {
     box-shadow: 0 0 0 3px rgba(102,126,234,0.12) !important;
 }
 
-/* ── Selectbox ─────────────────────────── */
-.stSelectbox > div > div > div {
-    border-radius: 10px !important; border: 2px solid #e8eaf6 !important;
-    background: white !important;
+/* ── LLM selector — official logos as button background images ── */
+/* Base padding for all four LLM buttons */
+button[aria-label="Claude"],
+button[aria-label="ChatGPT"],
+button[aria-label="Gemini"],
+button[aria-label="Perplexity"] {
+    padding-left: 40px !important;
+    background-repeat: no-repeat !important;
+    background-position: 12px center !important;
+    background-size: 20px 20px, auto !important;
+}
+/* Unselected: brand-colored logo on white */
+button:not([kind="primary"])[aria-label="Claude"] {
+    background-image: url('https://cdn.simpleicons.org/anthropic/CC785C') !important;
+}
+button:not([kind="primary"])[aria-label="ChatGPT"] {
+    background-image: url('https://cdn.simpleicons.org/openai/10A37F') !important;
+}
+button:not([kind="primary"])[aria-label="Gemini"] {
+    background-image: url('https://cdn.simpleicons.org/googlegemini/8E75B2') !important;
+}
+button:not([kind="primary"])[aria-label="Perplexity"] {
+    background-image: url('https://cdn.simpleicons.org/perplexity/5436DA') !important;
+}
+/* Selected (primary): white logo layered over gradient */
+button[kind="primary"][aria-label="Claude"] {
+    background: url('https://cdn.simpleicons.org/anthropic/ffffff') no-repeat 12px center / 20px 20px,
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+button[kind="primary"][aria-label="ChatGPT"] {
+    background: url('https://cdn.simpleicons.org/openai/ffffff') no-repeat 12px center / 20px 20px,
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+button[kind="primary"][aria-label="Gemini"] {
+    background: url('https://cdn.simpleicons.org/googlegemini/ffffff') no-repeat 12px center / 20px 20px,
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+button[kind="primary"][aria-label="Perplexity"] {
+    background: url('https://cdn.simpleicons.org/perplexity/ffffff') no-repeat 12px center / 20px 20px,
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
 }
 
 /* ── Code block (result) ─────────────────── */
@@ -152,11 +188,25 @@ _DEFAULTS = {
     "answers": {},
     "current_q": 0,
     "enhanced_prompt": "",
-    "draft": "",            # holds the text area value for the current question
+    "draft": "",              # holds the text area value for the current question
     "use_suggestion": False,
-    "last_request_time": 0, # unix timestamp of last API call (rate limiting)
-    "request_count": 0,     # total API calls this session
+    "last_request_time": 0,   # unix timestamp of last API call (rate limiting)
+    "request_count": 0,       # total API calls this session
+    "output_format": "(No preference)",
+    "output_format_details": "",
 }
+
+_OUTPUT_FORMAT_OPTIONS = [
+    "(No preference)",
+    "Prose / Essay",
+    "Bullet List",
+    "Table / Spreadsheet",
+    "Report with sections (PDF-style)",
+    "Code snippet",
+    "Step-by-step Guide",
+    "Email / Document",
+    "Chart / Visual description",
+]
 
 # Input limits — prevent runaway token costs from oversized inputs
 _MAX_PROMPT_CHARS = 6000   # ~1,500 tokens
@@ -209,6 +259,16 @@ def _reset():
     _init_state()
 
 
+def _get_answers_with_format() -> dict:
+    """Merge user Q&A answers with the chosen output format."""
+    answers = dict(st.session_state.answers)
+    fmt = st.session_state.output_format
+    details = st.session_state.get("output_format_details", "").strip()
+    if fmt and fmt != "(No preference)":
+        answers["desired_output_format"] = fmt + (f" — {details}" if details else "")
+    return answers
+
+
 _init_state()
 
 
@@ -239,9 +299,9 @@ def render_input():
     for col, llm in zip(cols, LLM_PROFILES.keys()):
         with col:
             is_sel = st.session_state.target_llm == llm
-            icon = _LLM_ICONS.get(llm, "🤖")
+            # Labels are plain LLM names so aria-label matches the CSS logo selectors
             st.button(
-                f"{icon}  {llm}",
+                llm,
                 key=f"llm_btn_{llm}",
                 use_container_width=True,
                 type="primary" if is_sel else "secondary",
@@ -249,6 +309,26 @@ def render_input():
                 args=(llm,),
             )
     st.caption(f"**Style:** {LLM_PROFILES[st.session_state.target_llm]['style_hint']}")
+
+    st.divider()
+
+    st.markdown("**Desired output format**")
+    st.caption("What should the final output look like? This shapes how the prompt is structured.")
+    output_fmt = st.selectbox(
+        "Output format",
+        options=_OUTPUT_FORMAT_OPTIONS,
+        index=_OUTPUT_FORMAT_OPTIONS.index(st.session_state.output_format)
+        if st.session_state.output_format in _OUTPUT_FORMAT_OPTIONS else 0,
+        label_visibility="collapsed",
+    )
+    st.session_state.output_format = output_fmt
+    if output_fmt != "(No preference)":
+        st.text_input(
+            "Format details (optional)",
+            placeholder="e.g., 10 pages with executive summary · 5 columns: Name, Date, Status, Owner, Notes · bar chart by region",
+            label_visibility="collapsed",
+            key="output_format_details",
+        )
 
     st.divider()
 
@@ -281,15 +361,27 @@ def render_input():
 
 
 # ---------------------------------------------------------------------------
-# LLM brand icons + selector callback
+# LLM brand assets + selector callback
 # ---------------------------------------------------------------------------
 
-_LLM_ICONS = {
-    "Claude":     "🔸",   # Anthropic — warm orange diamond
-    "ChatGPT":    "🟢",   # OpenAI — green
-    "Gemini":     "🔷",   # Google — blue
-    "Perplexity": "🔍",   # Perplexity — search
+# SimpleIcons CDN base URLs (append /<hex-color> for colored SVGs)
+_LLM_LOGO_BASE = {
+    "Claude":     "https://cdn.simpleicons.org/anthropic",
+    "ChatGPT":    "https://cdn.simpleicons.org/openai",
+    "Gemini":     "https://cdn.simpleicons.org/googlegemini",
+    "Perplexity": "https://cdn.simpleicons.org/perplexity",
 }
+_LLM_BRAND_COLOR = {
+    "Claude": "CC785C", "ChatGPT": "10A37F",
+    "Gemini": "8E75B2", "Perplexity": "5436DA",
+}
+
+
+def _llm_logo_url(llm: str, color: str | None = None) -> str:
+    """Return a SimpleIcons CDN URL for the given LLM logo."""
+    base = _LLM_LOGO_BASE[llm]
+    c = color or _LLM_BRAND_COLOR[llm]
+    return f"{base}/{c}"
 
 
 def _set_llm(llm: str):
@@ -341,8 +433,21 @@ def render_analysis():
     missing = {k: v for k, v in components.items() if not v}
     coverage = int(len(present) / max(len(components), 1) * 100)
 
-    st.caption(f"Target LLM: **{st.session_state.target_llm}**")
-    st.progress(coverage, text=f"Prompt completeness: {coverage}%")
+    # Styled LLM badge with official logo
+    llm = st.session_state.target_llm
+    st.markdown(
+        f'<div style="display:inline-flex;align-items:center;gap:10px;'
+        f'background:white;border:2px solid rgba(102,126,234,0.22);'
+        f'border-radius:10px;padding:8px 16px;margin-bottom:12px;'
+        f'box-shadow:0 2px 8px rgba(102,126,234,0.08);">'
+        f'<img src="{_llm_logo_url(llm)}" height="22" alt="{llm}"/>'
+        f'<span style="font-weight:700;color:#1a1a2e;font-size:0.95rem;">'
+        f'Target LLM: {llm}</span></div>',
+        unsafe_allow_html=True,
+    )
+    # Progress bar — text shown separately to prevent overlap
+    st.caption(f"Prompt completeness: **{coverage}%**")
+    st.progress(coverage)
 
     st.divider()
 
@@ -390,7 +495,7 @@ def render_analysis():
                             st.session_state.raw_prompt,
                             st.session_state.target_llm,
                             st.session_state.components,
-                            {},
+                            _get_answers_with_format(),
                         )
                         st.session_state.enhanced_prompt = enhanced
                     except Exception as e:
@@ -430,7 +535,7 @@ def render_analysis():
                                 st.session_state.raw_prompt,
                                 st.session_state.target_llm,
                                 st.session_state.components,
-                                {},
+                                _get_answers_with_format(),
                             )
                             st.session_state.enhanced_prompt = enhanced
                         except Exception as e:
@@ -469,7 +574,7 @@ def render_questions():
                     st.session_state.raw_prompt,
                     st.session_state.target_llm,
                     st.session_state.components,
-                    st.session_state.answers,
+                    _get_answers_with_format(),
                 )
                 st.session_state.enhanced_prompt = enhanced
             except Exception as e:
