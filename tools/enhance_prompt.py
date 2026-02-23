@@ -145,6 +145,26 @@ Important rules for {llm}:
 
 Avoid asking about components: {present_components}
 
+=== INTENT DETECTION — READ BEFORE GENERATING QUESTIONS ===
+First, identify the user's core intent from the raw prompt:
+
+IMAGE GENERATION intent (draw, paint, illustrate, generate an image, create a picture, \
+sketch, render, design an image): Ask about VISUAL attributes — art style \
+(photorealistic, anime, oil painting, watercolor, 3D render), mood/atmosphere, \
+lighting, color palette, composition, subject details, aspect ratio, camera angle. \
+The inferred_example must describe visual image parameters. NEVER suggest ASCII art, \
+text art, or code as the output format.
+
+TEXT / CHAT intent (write, explain, summarize, analyze, help me with, answer, \
+list, compare): Ask about the framework components normally. Output format means \
+written structure — paragraphs, bullets, tables, reports.
+
+SEARCH / RESEARCH intent (find, research, what is, look up, sources on): Follow \
+Perplexity-style research question conventions regardless of LLM selected.
+
+The inferred_example must reflect the ACTUAL intent — not a generic template.
+=== END INTENT DETECTION ===
+
 For each question you generate, also infer the most likely answer from the raw prompt \
 context — even if it's not stated explicitly. This inferred answer will be shown to \
 the user as a ready-to-use suggestion they can accept with one click.
@@ -178,7 +198,28 @@ You are a world-class prompt engineer specializing in {llm}.
 Transform the raw prompt provided in the user message into an expertly crafted \
 prompt optimized specifically for {llm}.
 
-=== {llm} STRUCTURE & STYLE REQUIREMENTS ===
+=== STEP 0 — DETECT INTENT BEFORE APPLYING ANY FRAMEWORK ===
+Read the raw prompt and determine the user's core intent. This OVERRIDES all framework rules below.
+
+IMAGE GENERATION (keywords: draw, paint, illustrate, generate an image, create a picture, \
+sketch, render, design an image):
+  - The enhanced prompt must be an IMAGE GENERATION PROMPT — a richly detailed scene \
+description specifying subject, style, mood, lighting, colors, composition, and \
+any relevant technical parameters (aspect ratio, camera angle, rendering style).
+  - Do NOT apply the text-output framework sections (Role, Chain-of-Thought, etc.) as \
+wrappers around an image description — they don't apply to image generation.
+  - Do NOT convert an image generation request into ASCII art, text art, code, or any \
+written representation of the image. The output should describe an image to be rendered.
+  - NEVER output ASCII art or text-based drawings in response to an image generation request.
+
+TEXT / CHAT (keywords: write, explain, summarize, analyze, help me with, answer, compare, \
+list, describe in words): Apply the full {llm} framework below normally.
+
+SEARCH / RESEARCH (keywords: find, research, what is, look up, sources on): Apply \
+research-focused framing regardless of LLM.
+=== END STEP 0 ===
+
+=== {llm} STRUCTURE & STYLE REQUIREMENTS (applies to TEXT/CHAT intent only) ===
 {special}
 
 === COMPONENT ORDER FOR {llm} ===
@@ -186,7 +227,7 @@ prompt optimized specifically for {llm}.
 
 === RULES ===
 1. Preserve the user's original intent completely — never change what they want.
-2. Apply {llm}'s preferred format, structure, and framing exactly.
+2. Apply {llm}'s preferred format, structure, and framing exactly (for text intent).
 3. Incorporate additional context from user answers naturally.
 4. If a component has NO information (not in raw prompt, not in answers), OMIT it entirely — do not hallucinate content.
 5. Output ONLY the final enhanced prompt — no explanation, no preamble, no "Here is your enhanced prompt:".
