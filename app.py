@@ -74,6 +74,48 @@ st.markdown("""
     border-color: #764ba2 !important; color: #764ba2 !important;
 }
 
+/* ── LLM selector — official logos via CSS background-image ── */
+/* Shared: add left padding so logo doesn't overlap text */
+button[aria-label="Claude"],
+button[aria-label="ChatGPT"],
+button[aria-label="Gemini"],
+button[aria-label="Perplexity"] {
+    padding-left: 40px !important;
+    background-repeat: no-repeat !important;
+    background-position: 12px center !important;
+    background-size: 20px 20px, auto !important;
+}
+/* Unselected: brand-colored logo on white */
+button:not([kind="primary"])[aria-label="Claude"] {
+    background-image: url('https://cdn.simpleicons.org/anthropic/CC785C') !important;
+}
+button:not([kind="primary"])[aria-label="ChatGPT"] {
+    background-image: url('https://cdn.simpleicons.org/chatgpt/74AA9C') !important;
+}
+button:not([kind="primary"])[aria-label="Gemini"] {
+    background-image: url('https://cdn.simpleicons.org/googlegemini/8E75B2') !important;
+}
+button:not([kind="primary"])[aria-label="Perplexity"] {
+    background-image: url('https://cdn.simpleicons.org/perplexity/5436DA') !important;
+}
+/* Selected (primary): white logo layered over gradient */
+button[kind="primary"][aria-label="Claude"] {
+    background: url('https://cdn.simpleicons.org/anthropic/ffffff') no-repeat 12px center / 20px 20px,
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+button[kind="primary"][aria-label="ChatGPT"] {
+    background: url('https://cdn.simpleicons.org/chatgpt/ffffff') no-repeat 12px center / 20px 20px,
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+button[kind="primary"][aria-label="Gemini"] {
+    background: url('https://cdn.simpleicons.org/googlegemini/ffffff') no-repeat 12px center / 20px 20px,
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+button[kind="primary"][aria-label="Perplexity"] {
+    background: url('https://cdn.simpleicons.org/perplexity/ffffff') no-repeat 12px center / 20px 20px,
+                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
 /* ── Progress bar ──────────────────────── */
 div[data-testid="stProgress"] > div {
     background: rgba(102,126,234,0.15); border-radius: 10px; height: 8px !important;
@@ -130,6 +172,16 @@ hr {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb { background: #667eea; border-radius: 3px; }
+
+/* ── Share button ───────────────────────── */
+.share-btn {
+    background: white; border: 1.5px solid rgba(102,126,234,0.4);
+    border-radius: 8px; padding: 5px 14px;
+    color: #667eea; font-size: 0.82rem; cursor: pointer;
+    font-weight: 500; font-family: inherit;
+    transition: all 0.18s ease;
+}
+.share-btn:hover { background: rgba(102,126,234,0.06); border-color: #667eea; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -148,19 +200,19 @@ _DEFAULTS = {
     "enhanced_prompt": "",
     "draft": "",              # holds the text area value for the current question
     "use_suggestion": False,
-    "last_request_time": 0,   # unix timestamp of last API call (rate limiting)
+    "last_request_time": 0,   # unix timestamp of last API call
     "request_count": 0,       # total API calls this session
 }
 
-# Input limits — prevent runaway token costs from oversized inputs
-_MAX_PROMPT_CHARS = 6000   # ~1,500 tokens
-_MAX_ANSWER_CHARS = 1000   # per clarifying question answer
+# Input limits
+_MAX_PROMPT_CHARS = 6000
+_MAX_ANSWER_CHARS = 1000
 
-# Rate limiting — per session (not per IP; use a reverse proxy for IP-level limiting)
-_MIN_SECONDS_BETWEEN_REQUESTS = 10  # seconds between full enhancement runs
-_MAX_REQUESTS_PER_SESSION = 20      # hard cap per browser session
+# Rate limiting — no enforced wait between requests; just a per-session cap
+_MIN_SECONDS_BETWEEN_REQUESTS = 0   # no cooldown
+_MAX_REQUESTS_PER_SESSION = 60      # ~20 full enhance flows per browser session
 
-# Fixed output-format question — always prepended to the Q&A flow regardless of LLM
+# Fixed output-format question — always prepended to the Q&A flow
 _OUTPUT_FORMAT_QUESTION = {
     "component": "desired_output_format",
     "question": "What format would you like the final output in?",
@@ -184,10 +236,11 @@ _OUTPUT_FORMAT_QUESTION = {
 def _check_rate_limit() -> str | None:
     """Return an error message string if rate limited, else None."""
     now = time.time()
-    elapsed = now - st.session_state.last_request_time
-    if elapsed < _MIN_SECONDS_BETWEEN_REQUESTS:
-        wait = int(_MIN_SECONDS_BETWEEN_REQUESTS - elapsed) + 1
-        return f"Please wait {wait} seconds before submitting again."
+    if _MIN_SECONDS_BETWEEN_REQUESTS > 0:
+        elapsed = now - st.session_state.last_request_time
+        if elapsed < _MIN_SECONDS_BETWEEN_REQUESTS:
+            wait = int(_MIN_SECONDS_BETWEEN_REQUESTS - elapsed) + 1
+            return f"Please wait {wait} seconds before submitting again."
     if st.session_state.request_count >= _MAX_REQUESTS_PER_SESSION:
         return "Session limit reached. Please refresh the page to start a new session."
     return None
@@ -207,7 +260,6 @@ def _safe_api_error(e: Exception) -> str:
         return "The AI service is busy. Please try again in a few seconds."
     if "overloaded" in msg.lower() or "529" in msg:
         return "The AI service is temporarily overloaded. Please try again shortly."
-    # Generic fallback — never show raw exception to public users
     return "Something went wrong while processing your request. Please try again."
 
 
@@ -236,24 +288,23 @@ def _hero(title: str, subtitle: str, badge: str = ""):
 
 
 # ---------------------------------------------------------------------------
-# LLM brand assets + selector callback
+# LLM brand assets + helpers
 # ---------------------------------------------------------------------------
 
 # SimpleIcons CDN — append /<hex-color> for a coloured SVG
 _LLM_LOGO_BASE = {
     "Claude":     "https://cdn.simpleicons.org/anthropic",
-    "ChatGPT":    "https://cdn.simpleicons.org/openai",
+    "ChatGPT":    "https://cdn.simpleicons.org/chatgpt",
     "Gemini":     "https://cdn.simpleicons.org/googlegemini",
     "Perplexity": "https://cdn.simpleicons.org/perplexity",
 }
 _LLM_BRAND_COLOR = {
-    "Claude": "CC785C", "ChatGPT": "10A37F",
+    "Claude": "CC785C", "ChatGPT": "74AA9C",
     "Gemini": "8E75B2", "Perplexity": "5436DA",
 }
 
 
 def _llm_logo_url(llm: str, color: str | None = None) -> str:
-    """Return a SimpleIcons CDN URL for the given LLM logo."""
     base = _LLM_LOGO_BASE[llm]
     c = color or _LLM_BRAND_COLOR[llm]
     return f"{base}/{c}"
@@ -263,17 +314,55 @@ def _set_llm(llm: str):
     st.session_state.target_llm = llm
 
 
+def _llm_badge():
+    """Render the styled Target LLM badge with official logo (shown on pages 2–4)."""
+    llm = st.session_state.target_llm
+    st.markdown(
+        f'<div style="display:inline-flex;align-items:center;gap:10px;'
+        f'background:white;border:2px solid rgba(102,126,234,0.22);'
+        f'border-radius:10px;padding:8px 16px;margin-bottom:12px;'
+        f'box-shadow:0 2px 8px rgba(102,126,234,0.08);">'
+        f'<img src="{_llm_logo_url(llm)}" height="22" alt="{llm}"/>'
+        f'<span style="font-weight:700;color:#1a1a2e;font-size:0.95rem;">'
+        f'Target LLM: {llm}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Stage 1 — Input
 # ---------------------------------------------------------------------------
+
+_COMPONENT_ICONS = {
+    "role": "👤", "task": "🎯", "context": "🗂️", "examples": "📋",
+    "output": "📄", "constraints": "🚧", "instructions": "📌",
+    "persona": "👤", "objective": "🎯", "steps": "🔢", "output_format": "📄",
+    "chain_of_thought": "🧠", "background": "🗂️",
+    "research_question": "🔍", "time_scope": "📅", "source_types": "📚",
+    "inclusions": "✅", "exclusions": "❌",
+    "desired_output_format": "🖨️",
+}
 
 
 def render_input():
     _hero(
         "✦ Prompt Enhancement Tool",
-        "Enter your rough prompt, choose your target LLM, and we'll restructure "
-        "it using that model's proven prompt engineering framework.",
+        "From rough draft to expert-crafted prompt — optimized for your chosen AI model.",
         badge="Step 1 of 4 · Enter Prompt",
+    )
+
+    # Brief description
+    st.markdown(
+        '<div style="background:white;border:1.5px solid rgba(102,126,234,0.15);'
+        'border-radius:12px;padding:1rem 1.5rem;margin-bottom:1.2rem;">'
+        '<p style="margin:0;color:#374151;font-size:0.91rem;line-height:1.7;">'
+        'Paste any rough prompt, pick your target LLM — '
+        '<strong>Claude, ChatGPT, Gemini,</strong> or <strong>Perplexity</strong> — '
+        'and this tool applies that model\'s official prompt engineering framework to '
+        'restructure it. We\'ll analyze what\'s missing, ask targeted clarifying questions, '
+        'and deliver a ready-to-paste enhanced prompt that gets you significantly better responses.'
+        '</p></div>',
+        unsafe_allow_html=True,
     )
 
     st.markdown("**Select your target LLM**")
@@ -281,16 +370,7 @@ def render_input():
     for col, llm in zip(cols, LLM_PROFILES.keys()):
         with col:
             is_sel = st.session_state.target_llm == llm
-            border_color = "#667eea" if is_sel else "#e0e0ef"
-            card_bg = "rgba(102,126,234,0.07)" if is_sel else "white"
-            # Official logo via HTML img tag — rendered before the button
-            st.markdown(
-                f'<div style="border:2px solid {border_color};border-radius:10px;'
-                f'background:{card_bg};padding:10px 4px 8px;text-align:center;'
-                f'margin-bottom:6px;">'
-                f'<img src="{_llm_logo_url(llm)}" height="28" alt="{llm} logo" /></div>',
-                unsafe_allow_html=True,
-            )
+            # Logo is injected via CSS background-image using aria-label selector
             st.button(
                 llm,
                 key=f"llm_btn_{llm}",
@@ -326,23 +406,13 @@ def render_input():
             else:
                 st.session_state.raw_prompt = raw_prompt.strip()
                 st.session_state.stage = "analysis"
-                st.session_state.components = {}   # clear any previous run
+                st.session_state.components = {}
                 st.rerun()
 
 
 # ---------------------------------------------------------------------------
 # Stage 2 — Analysis
 # ---------------------------------------------------------------------------
-
-_COMPONENT_ICONS = {
-    "role": "👤", "task": "🎯", "context": "🗂️", "examples": "📋",
-    "output": "📄", "constraints": "🚧", "instructions": "📌",
-    "persona": "👤", "objective": "🎯", "steps": "🔢", "output_format": "📄",
-    "chain_of_thought": "🧠", "background": "🗂️",
-    "research_question": "🔍", "time_scope": "📅", "source_types": "📚",
-    "inclusions": "✅", "exclusions": "❌",
-    "desired_output_format": "🖨️",
-}
 
 
 def render_analysis():
@@ -353,11 +423,12 @@ def render_analysis():
         badge="Step 2 of 4 · Analysis",
     )
 
-    # Back button
     if st.button("← Back", key="back_analysis"):
         st.session_state.stage = "input"
         st.session_state.components = {}
         st.rerun()
+
+    _llm_badge()
 
     # Run analysis once and cache in session state
     if not st.session_state.components:
@@ -381,19 +452,6 @@ def render_analysis():
     missing = {k: v for k, v in components.items() if not v}
     coverage = int(len(present) / max(len(components), 1) * 100)
 
-    # Styled LLM badge with official logo
-    llm = st.session_state.target_llm
-    st.markdown(
-        f'<div style="display:inline-flex;align-items:center;gap:10px;'
-        f'background:white;border:2px solid rgba(102,126,234,0.22);'
-        f'border-radius:10px;padding:8px 16px;margin-bottom:12px;'
-        f'box-shadow:0 2px 8px rgba(102,126,234,0.08);">'
-        f'<img src="{_llm_logo_url(llm)}" height="22" alt="{llm}"/>'
-        f'<span style="font-weight:700;color:#1a1a2e;font-size:0.95rem;">'
-        f'Target LLM: {llm}</span></div>',
-        unsafe_allow_html=True,
-    )
-    # Progress bar — text shown separately to prevent overlap
     st.caption(f"Prompt completeness: **{coverage}%**")
     st.progress(coverage)
 
@@ -529,7 +587,6 @@ def render_questions():
         badge=f"Step 3 of 4 · Question {idx + 1} of {total}",
     )
 
-    # Back button — returns to analysis, clears Q&A state
     if st.button("← Back", key="back_questions"):
         st.session_state.stage = "analysis"
         st.session_state.questions = []
@@ -538,6 +595,8 @@ def render_questions():
         st.session_state.draft = ""
         st.rerun()
 
+    _llm_badge()
+
     st.progress(idx / total)
     st.divider()
 
@@ -545,7 +604,6 @@ def render_questions():
     st.caption(f"Improving: {icon} **{component_label}**")
     st.subheader(q["question"])
 
-    # Inferred suggestion box — st.code() gives a built-in copy icon (top-right)
     if q.get("inferred_example"):
         st.markdown("💡 **Based on your prompt, we suggest** *(click the copy icon to copy, or accept below):*")
         st.code(q["inferred_example"], language="text", wrap_lines=True)
@@ -553,7 +611,6 @@ def render_questions():
         use_col, _ = st.columns([1, 3])
         with use_col:
             if st.button("✓ Accept & Continue →", key=f"use_{idx}", type="primary"):
-                # Save suggestion as the answer and auto-advance to next question
                 st.session_state.answers[q["component"]] = q["inferred_example"]
                 st.session_state.current_q += 1
                 st.session_state.draft = ""
@@ -604,20 +661,18 @@ def render_result():
         badge="Step 4 of 4 · Done ✦",
     )
 
-    # Back button
     if st.button("← Back to Analysis", key="back_result"):
         st.session_state.stage = "analysis"
         st.session_state.enhanced_prompt = ""
         st.rerun()
 
-    enhanced = st.session_state.enhanced_prompt
+    _llm_badge()
 
-    # st.code() has a built-in copy icon (top-right corner)
+    enhanced = st.session_state.enhanced_prompt
     st.code(enhanced, language="text", wrap_lines=True)
 
     st.divider()
 
-    # Before / after comparison
     with st.expander("Compare: Original vs Enhanced"):
         c1, c2 = st.columns(2)
         with c1:
@@ -627,7 +682,6 @@ def render_result():
             st.markdown("**Enhanced**")
             st.text(enhanced)
 
-    # What the user contributed via answers
     if st.session_state.answers:
         with st.expander("What was added from your answers"):
             profile = LLM_PROFILES[st.session_state.target_llm]
@@ -667,12 +721,19 @@ elif stage == "result":
 st.markdown(
     '<div style="margin-top:3rem;padding-top:1.2rem;'
     'border-top:1px solid rgba(102,126,234,0.18);'
-    'text-align:center;color:#9ca3af;font-size:0.8rem;line-height:2.2;">'
+    'text-align:center;color:#9ca3af;font-size:0.8rem;line-height:2.4;">'
     '&copy; 2026 Motasem AlShareef &nbsp;&middot;&nbsp; All rights reserved<br>'
     'Built with&nbsp;'
     '<img src="https://cdn.simpleicons.org/anthropic/9ca3af" height="13" '
-    'style="vertical-align:middle;margin:0 3px 2px;" alt="Claude" />'
+    'style="vertical-align:middle;margin:0 3px 2px;" alt="Claude"/>'
     '&nbsp;<strong style="color:#6b7280;">Claude Code</strong>'
+    '&nbsp;&nbsp;&middot;&nbsp;&nbsp;'
+    '<button class="share-btn" '
+    'onclick="var b=this;navigator.clipboard.writeText(window.location.href)'
+    '.then(function(){b.textContent=\'✓ Link copied!\';'
+    'setTimeout(function(){b.textContent=\'🔗 Share this tool\';},2200);});">'
+    '🔗 Share this tool'
+    '</button>'
     '</div>',
     unsafe_allow_html=True,
 )
