@@ -75,44 +75,58 @@ st.markdown("""
 }
 
 /* ── LLM selector — official logos via CSS background-image ── */
-/* Shared: add left padding so logo doesn't overlap text */
+/* Dual selectors (.stButton > and direct) for Streamlit version compatibility */
+/* Shared: left padding so logo doesn't overlap text */
+.stButton > button[aria-label="Claude"],
+.stButton > button[aria-label="ChatGPT"],
+.stButton > button[aria-label="Gemini"],
+.stButton > button[aria-label="Perplexity"],
 button[aria-label="Claude"],
 button[aria-label="ChatGPT"],
 button[aria-label="Gemini"],
 button[aria-label="Perplexity"] {
-    padding-left: 40px !important;
+    padding-left: 44px !important;
     background-repeat: no-repeat !important;
     background-position: 12px center !important;
-    background-size: 20px 20px, auto !important;
+    background-size: 22px 22px, auto !important;
 }
-/* Unselected: brand-colored logo on white */
+/* Unselected: brand-colored / official logo on white background */
+.stButton > button:not([kind="primary"])[aria-label="Claude"],
 button:not([kind="primary"])[aria-label="Claude"] {
     background-image: url('https://cdn.simpleicons.org/anthropic/CC785C') !important;
 }
+.stButton > button:not([kind="primary"])[aria-label="ChatGPT"],
 button:not([kind="primary"])[aria-label="ChatGPT"] {
     background-image: url('https://cdn.simpleicons.org/chatgpt/74AA9C') !important;
 }
+/* Gemini: official multicolor sparkle logo */
+.stButton > button:not([kind="primary"])[aria-label="Gemini"],
 button:not([kind="primary"])[aria-label="Gemini"] {
-    background-image: url('https://cdn.simpleicons.org/googlegemini/8E75B2') !important;
+    background-image: url('https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg') !important;
 }
+.stButton > button:not([kind="primary"])[aria-label="Perplexity"],
 button:not([kind="primary"])[aria-label="Perplexity"] {
     background-image: url('https://cdn.simpleicons.org/perplexity/5436DA') !important;
 }
 /* Selected (primary): white logo layered over gradient */
+.stButton > button[kind="primary"][aria-label="Claude"],
 button[kind="primary"][aria-label="Claude"] {
-    background: url('https://cdn.simpleicons.org/anthropic/ffffff') no-repeat 12px center / 20px 20px,
+    background: url('https://cdn.simpleicons.org/anthropic/ffffff') no-repeat 12px center / 22px 22px,
                 linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
 }
+.stButton > button[kind="primary"][aria-label="ChatGPT"],
 button[kind="primary"][aria-label="ChatGPT"] {
-    background: url('https://cdn.simpleicons.org/chatgpt/ffffff') no-repeat 12px center / 20px 20px,
+    background: url('https://cdn.simpleicons.org/chatgpt/ffffff') no-repeat 12px center / 22px 22px,
                 linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
 }
+.stButton > button[kind="primary"][aria-label="Gemini"],
 button[kind="primary"][aria-label="Gemini"] {
-    background: url('https://cdn.simpleicons.org/googlegemini/ffffff') no-repeat 12px center / 20px 20px,
+    background: url('https://cdn.simpleicons.org/googlegemini/ffffff') no-repeat 12px center / 22px 22px,
                 linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
 }
+.stButton > button[kind="primary"][aria-label="Perplexity"],
 button[kind="primary"][aria-label="Perplexity"] {
-    background: url('https://cdn.simpleicons.org/perplexity/ffffff') no-repeat 12px center / 20px 20px,
+    background: url('https://cdn.simpleicons.org/perplexity/ffffff') no-repeat 12px center / 22px 22px,
                 linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
 }
 
@@ -173,15 +187,20 @@ hr {
 ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb { background: #667eea; border-radius: 3px; }
 
-/* ── Share button ───────────────────────── */
-.share-btn {
-    background: white; border: 1.5px solid rgba(102,126,234,0.4);
-    border-radius: 8px; padding: 5px 14px;
-    color: #667eea; font-size: 0.82rem; cursor: pointer;
-    font-weight: 500; font-family: inherit;
-    transition: all 0.18s ease;
+/* ── Share button (lives inside the hero banner) ── */
+.share-top-btn {
+    background: rgba(255,255,255,0.16);
+    border: 1.5px solid rgba(255,255,255,0.48);
+    border-radius: 20px; padding: 5px 16px;
+    color: rgba(255,255,255,0.93); font-size: 0.8rem;
+    cursor: pointer; font-weight: 500;
+    font-family: inherit; white-space: nowrap;
+    transition: all 0.18s ease; letter-spacing: 0.01em;
 }
-.share-btn:hover { background: rgba(102,126,234,0.06); border-color: #667eea; }
+.share-top-btn:hover {
+    background: rgba(255,255,255,0.28);
+    border-color: rgba(255,255,255,0.8); color: white;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -278,13 +297,30 @@ def _reset():
 _init_state()
 
 
-def _hero(title: str, subtitle: str, badge: str = ""):
+def _hero(title: str, subtitle: str, badge: str = "", show_share: bool = False):
     """Render a gradient hero banner replacing st.title()."""
     badge_html = f'<div class="step-badge">{badge}</div>' if badge else ""
-    st.markdown(
-        f'<div class="hero">{badge_html}<h1>{title}</h1><p>{subtitle}</p></div>',
-        unsafe_allow_html=True,
-    )
+    text_block = f'{badge_html}<h1>{title}</h1><p>{subtitle}</p>'
+
+    if show_share:
+        share_btn = (
+            '<button class="share-top-btn" '
+            'onclick="var b=this;navigator.clipboard.writeText(window.location.href)'
+            ".then(function(){b.textContent='\u2713 Link copied!';"
+            "setTimeout(function(){b.textContent='\U0001f517 Share this tool';},2400);});"
+            '">\U0001f517 Share this tool</button>'
+        )
+        inner = (
+            f'<div style="display:flex;justify-content:space-between;'
+            f'align-items:flex-start;gap:16px;">'
+            f'<div style="flex:1;">{text_block}</div>'
+            f'<div style="flex-shrink:0;padding-top:6px;">{share_btn}</div>'
+            f'</div>'
+        )
+    else:
+        inner = text_block
+
+    st.markdown(f'<div class="hero">{inner}</div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +385,7 @@ def render_input():
         "✦ Prompt Enhancement Tool",
         "From rough draft to expert-crafted prompt — optimized for your chosen AI model.",
         badge="Step 1 of 4 · Enter Prompt",
+        show_share=True,
     )
 
     # Brief description
@@ -721,19 +758,12 @@ elif stage == "result":
 st.markdown(
     '<div style="margin-top:3rem;padding-top:1.2rem;'
     'border-top:1px solid rgba(102,126,234,0.18);'
-    'text-align:center;color:#9ca3af;font-size:0.8rem;line-height:2.4;">'
+    'text-align:center;color:#9ca3af;font-size:0.8rem;line-height:2.2;">'
     '&copy; 2026 Motasem AlShareef &nbsp;&middot;&nbsp; All rights reserved<br>'
     'Built with&nbsp;'
     '<img src="https://cdn.simpleicons.org/anthropic/9ca3af" height="13" '
     'style="vertical-align:middle;margin:0 3px 2px;" alt="Claude"/>'
     '&nbsp;<strong style="color:#6b7280;">Claude Code</strong>'
-    '&nbsp;&nbsp;&middot;&nbsp;&nbsp;'
-    '<button class="share-btn" '
-    'onclick="var b=this;navigator.clipboard.writeText(window.location.href)'
-    '.then(function(){b.textContent=\'✓ Link copied!\';'
-    'setTimeout(function(){b.textContent=\'🔗 Share this tool\';},2200);});">'
-    '🔗 Share this tool'
-    '</button>'
     '</div>',
     unsafe_allow_html=True,
 )
