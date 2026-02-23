@@ -75,9 +75,41 @@ st.markdown("""
     border-color: #764ba2 !important; color: #764ba2 !important;
 }
 
-/* ── LLM selector — logos injected via JavaScript (see _inject_llm_logos) ── */
-/* Left-pad all LLM buttons so JS-injected background logos don't overlap text */
-button[kind="primary"], button[kind="secondary"] { transition: all 0.18s ease !important; }
+/* ── LLM Dropdown (replaces button selector) ───────── */
+[data-testid="stRadio"] [role="radiogroup"] {
+    position: absolute !important; opacity: 0 !important;
+    pointer-events: none !important; height: 0 !important; overflow: hidden !important;
+}
+[data-testid="stRadio"] > div { margin: 0 !important; padding: 0 !important; }
+.llm-dd-container {
+    position: relative; width: 280px; user-select: none; margin: 4px 0 10px 0;
+}
+.llm-dd-trigger {
+    display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+    background: white; border: 2px solid #667eea; border-radius: 10px;
+    cursor: pointer; font-weight: 600; font-size: 0.93rem; color: #1a1a2e;
+    box-shadow: 0 2px 8px rgba(102,126,234,0.12); transition: all 0.18s;
+}
+.llm-dd-trigger:hover { border-color: #764ba2; box-shadow: 0 4px 14px rgba(102,126,234,0.25); }
+.llm-dd-trigger img { width: 22px; height: 22px; object-fit: contain; }
+.llm-dd-arrow { margin-left: auto; color: #667eea; transition: transform 0.18s; font-size: 0.8rem; }
+.llm-dd-container.open .llm-dd-arrow { transform: rotate(180deg); }
+.llm-dd-options {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: white; border: 2px solid rgba(102,126,234,0.22); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(102,126,234,0.18); z-index: 99999; overflow: hidden;
+}
+.llm-dd-container.open .llm-dd-options { display: block; }
+.llm-dd-option {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    cursor: pointer; font-size: 0.9rem; font-weight: 500; color: #1a1a2e;
+    transition: background 0.12s; border-bottom: 1px solid rgba(102,126,234,0.07);
+}
+.llm-dd-option:last-child { border-bottom: none; }
+.llm-dd-option:hover { background: rgba(102,126,234,0.06); }
+.llm-dd-option.active { background: rgba(102,126,234,0.1); color: #667eea; font-weight: 700; }
+.llm-dd-option img { width: 20px; height: 20px; object-fit: contain; }
+.llm-dd-check { margin-left: auto; color: #667eea; font-size: 0.85rem; }
 
 /* ── Progress bar ──────────────────────── */
 div[data-testid="stProgress"] > div {
@@ -180,25 +212,6 @@ _MAX_ANSWER_CHARS = 1000
 _MIN_SECONDS_BETWEEN_REQUESTS = 0   # no cooldown
 _MAX_REQUESTS_PER_SESSION = 60      # ~20 full enhance flows per browser session
 
-# Fixed output-format question — always prepended to the Q&A flow
-_OUTPUT_FORMAT_QUESTION = {
-    "component": "desired_output_format",
-    "question": "What format would you like the final output in?",
-    "inferred_example": (
-        "A well-structured written report organised into the following sections:\n"
-        "• Executive Summary (2–3 sentences capturing the single most important takeaway)\n"
-        "• Main Body divided into clearly labelled sections, each with 2–4 bullet points "
-        "followed by a short explanatory paragraph\n"
-        "• A Quick-Reference Table at the end (columns: Topic | Key Finding | Recommended Action)\n"
-        "• Conclusion with 3–5 concrete, actionable next steps\n\n"
-        "Tone: professional yet approachable — suitable for a non-technical stakeholder audience.\n"
-        "Length: 800–1,200 words. Avoid jargon. Use plain language throughout."
-    ),
-    "placeholder": (
-        "e.g., A 2-page bullet summary · A 10-column spreadsheet · "
-        "A step-by-step tutorial · A formal PDF-style report with sections"
-    ),
-}
 
 
 def _check_rate_limit() -> str | None:
@@ -295,8 +308,6 @@ def _llm_logo_url(llm: str, color: str | None = None) -> str:
     return f"{base}/{c}"
 
 
-def _set_llm(llm: str):
-    st.session_state.target_llm = llm
 
 
 def _llm_badge():
@@ -314,92 +325,133 @@ def _llm_badge():
     )
 
 
-# ---------------------------------------------------------------------------
-# Intent detection + image-specific output format question
-# ---------------------------------------------------------------------------
-
-_IMAGE_KEYWORDS = frozenset([
-    "draw", "paint", "illustrate", "generate an image", "create a picture",
-    "sketch", "render", "design an image", "create image", "make an image",
-    "generate image", "create a drawing", "make a drawing", "make a picture",
-    "create an illustration", "produce an image", "make me an image",
-])
-
-
-def _is_image_intent(raw_prompt: str) -> bool:
-    """Return True if the prompt is asking for image / visual art generation."""
-    lower = raw_prompt.lower()
-    return any(kw in lower for kw in _IMAGE_KEYWORDS)
-
-
-_IMAGE_FORMAT_QUESTION = {
-    "component": "desired_output_format",
-    "question": "What visual style and format should the generated image be in?",
-    "inferred_example": (
-        "Art style: photorealistic photograph, warm natural lighting\n"
-        "Aspect ratio: 16:9 landscape (or 1:1 square for social media use)\n"
-        "Color palette: warm earthy tones with a golden-hour atmosphere\n"
-        "Detail level: highly detailed, sharp focus throughout\n"
-        "Camera angle: medium shot, eye-level or slightly low angle\n"
-        "Mood: playful and lighthearted — expressive, emotive subject"
-    ),
-    "placeholder": (
-        "e.g., Photorealistic · Cartoon / anime · Oil painting · "
-        "Aspect ratio 16:9 · Watercolor · Black and white"
-    ),
-}
 
 
 # ---------------------------------------------------------------------------
-# Logo injection — JavaScript via component iframe
+# Dropdown injection — JavaScript via component iframe
 # ---------------------------------------------------------------------------
 
-_LOGO_JS = """
+_LLM_DROPDOWN_JS = """
 <style>html,body{margin:0;padding:0;height:0;overflow:hidden}</style>
 <script>
 (function() {
-    var unsel = {
+    var LOGOS = {
         'Claude':     'https://cdn.simpleicons.org/anthropic/CC785C',
         'ChatGPT':    'https://cdn.simpleicons.org/chatgpt/74AA9C',
         'Gemini':     'https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg',
         'Perplexity': 'https://cdn.simpleicons.org/perplexity/5436DA'
     };
-    var sel = {
-        'Claude':     'https://cdn.simpleicons.org/anthropic/ffffff',
-        'ChatGPT':    'https://cdn.simpleicons.org/chatgpt/ffffff',
-        'Gemini':     'https://cdn.simpleicons.org/googlegemini/ffffff',
-        'Perplexity': 'https://cdn.simpleicons.org/perplexity/ffffff'
-    };
-    function applyLogos() {
+    var buildTimer = null;
+
+    function buildDropdown() {
         try {
             var doc = window.parent.document;
-            doc.querySelectorAll('button').forEach(function(btn) {
-                var text = (btn.innerText || btn.textContent || '').trim();
-                if (!unsel[text]) return;
-                var isPrimary = btn.getAttribute('kind') === 'primary';
-                var url = isPrimary ? sel[text] : unsel[text];
-                btn.style.setProperty('padding-left', '44px', 'important');
-                btn.style.setProperty('background-image', 'url(' + url + ')', 'important');
-                btn.style.setProperty('background-repeat', 'no-repeat', 'important');
-                btn.style.setProperty('background-position', '12px center', 'important');
-                btn.style.setProperty('background-size', '22px 22px', 'important');
+            var stRadio = doc.querySelector('[data-testid="stRadio"]');
+            if (!stRadio) return;
+            var radioGroup = stRadio.querySelector('[role="radiogroup"]');
+            if (!radioGroup) return;
+
+            // Already built and current?
+            var next = radioGroup.nextElementSibling;
+            if (next && next.classList.contains('llm-dd-container')) return;
+
+            // Remove stale dropdowns
+            doc.querySelectorAll('.llm-dd-container').forEach(function(d) { d.remove(); });
+
+            // Gather options from radio inputs
+            var items = [];
+            radioGroup.querySelectorAll('input[type="radio"]').forEach(function(inp) {
+                var label = inp.closest('label');
+                var text = label ? label.textContent.trim() : '';
+                items.push({ input: inp, text: text, checked: inp.checked });
             });
+            if (!items.length) return;
+
+            var sel = items.find(function(i) { return i.checked; }) || items[0];
+
+            // Build container
+            var dd = doc.createElement('div');
+            dd.className = 'llm-dd-container';
+
+            // Trigger
+            var trigger = doc.createElement('div');
+            trigger.className = 'llm-dd-trigger';
+            trigger.innerHTML =
+                '<img class="llm-dd-logo" src="' + (LOGOS[sel.text]||'') + '" alt=""/>' +
+                '<span class="llm-dd-name">' + sel.text + '</span>' +
+                '<span class="llm-dd-arrow">&#9660;</span>';
+
+            // Options list
+            var optsList = doc.createElement('div');
+            optsList.className = 'llm-dd-options';
+
+            items.forEach(function(item) {
+                var opt = doc.createElement('div');
+                opt.className = 'llm-dd-option' + (item.checked ? ' active' : '');
+                opt.innerHTML =
+                    '<img src="' + (LOGOS[item.text]||'') + '" alt="' + item.text + '"/>' +
+                    '<span>' + item.text + '</span>' +
+                    (item.checked ? '<span class="llm-dd-check">&#10003;</span>' : '');
+
+                opt.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    item.input.click();
+                    item.input.dispatchEvent(new Event('change', { bubbles: true }));
+                    dd.querySelector('.llm-dd-logo').src = LOGOS[item.text] || '';
+                    dd.querySelector('.llm-dd-name').textContent = item.text;
+                    optsList.querySelectorAll('.llm-dd-option').forEach(function(o) {
+                        o.classList.remove('active');
+                        var chk = o.querySelector('.llm-dd-check');
+                        if (chk) chk.remove();
+                    });
+                    opt.classList.add('active');
+                    var chk = doc.createElement('span');
+                    chk.className = 'llm-dd-check'; chk.innerHTML = '&#10003;';
+                    opt.appendChild(chk);
+                    dd.classList.remove('open');
+                });
+                optsList.appendChild(opt);
+            });
+
+            dd.appendChild(trigger);
+            dd.appendChild(optsList);
+
+            trigger.addEventListener('click', function(e) {
+                e.stopPropagation();
+                dd.classList.toggle('open');
+            });
+
+            // Close on outside click — add listener only once per document
+            if (!doc._llmDdListener) {
+                doc._llmDdListener = true;
+                doc.addEventListener('click', function() {
+                    var d = doc.querySelector('.llm-dd-container');
+                    if (d) d.classList.remove('open');
+                });
+            }
+
+            radioGroup.parentNode.insertBefore(dd, radioGroup.nextSibling);
         } catch(e) {}
     }
-    applyLogos();
-    // Re-apply after any DOM change (Streamlit rerenders wipe inline styles)
-    new MutationObserver(applyLogos).observe(
+
+    function schedule() {
+        clearTimeout(buildTimer);
+        buildTimer = setTimeout(buildDropdown, 80);
+    }
+
+    schedule();
+    new MutationObserver(schedule).observe(
         window.parent.document.body,
-        {childList: true, subtree: true}
+        { childList: true, subtree: true }
     );
 })();
 </script>
 """
 
 
-def _inject_llm_logos():
-    """Inject LLM brand logos into selector buttons via a 0px component iframe."""
-    components.html(_LOGO_JS, height=0, scrolling=False)
+def _inject_llm_dropdown():
+    """Transform the hidden st.radio into a custom logo+name dropdown via JS."""
+    components.html(_LLM_DROPDOWN_JS, height=0, scrolling=False)
 
 
 # ---------------------------------------------------------------------------
@@ -440,21 +492,18 @@ def render_input():
     )
 
     st.markdown("**Select your target LLM**")
-    cols = st.columns(len(LLM_PROFILES))
-    for col, llm in zip(cols, LLM_PROFILES.keys()):
-        with col:
-            is_sel = st.session_state.target_llm == llm
-            st.button(
-                llm,
-                key=f"llm_btn_{llm}",
-                use_container_width=True,
-                type="primary" if is_sel else "secondary",
-                on_click=_set_llm,
-                args=(llm,),
-            )
-    # Inject brand logos into the buttons via JavaScript (CSS aria-label selectors
-    # are unreliable in Streamlit — JS finds buttons by text content instead)
-    _inject_llm_logos()
+    llm_keys = list(LLM_PROFILES.keys())
+    selected_llm = st.radio(
+        "Target LLM",
+        options=llm_keys,
+        index=llm_keys.index(st.session_state.target_llm),
+        horizontal=True,
+        label_visibility="collapsed",
+        key="llm_radio",
+    )
+    if selected_llm:
+        st.session_state.target_llm = selected_llm
+    _inject_llm_dropdown()
     st.caption(f"**Style:** {LLM_PROFILES[st.session_state.target_llm]['style_hint']}")
 
     st.divider()
@@ -608,15 +657,7 @@ def render_analysis():
                     except Exception as e:
                         st.error(_safe_api_error(e))
                         st.stop()
-                # Prepend an output format question — visual-style for image prompts,
-                # written-report template for text/chat prompts
-                fmt_q = (
-                    _IMAGE_FORMAT_QUESTION
-                    if _is_image_intent(st.session_state.raw_prompt)
-                    else _OUTPUT_FORMAT_QUESTION
-                )
-                all_questions = [fmt_q] + questions
-                st.session_state.questions = all_questions
+                st.session_state.questions = questions
                 st.session_state.current_q = 0
                 st.session_state.answers = {}
                 st.session_state.draft = ""
