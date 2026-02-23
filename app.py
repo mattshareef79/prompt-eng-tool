@@ -3,6 +3,7 @@
 import time
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from tools.enhance_prompt import (
     LLM_PROFILES,
@@ -74,61 +75,9 @@ st.markdown("""
     border-color: #764ba2 !important; color: #764ba2 !important;
 }
 
-/* ── LLM selector — official logos via CSS background-image ── */
-/* Dual selectors (.stButton > and direct) for Streamlit version compatibility */
-/* Shared: left padding so logo doesn't overlap text */
-.stButton > button[aria-label="Claude"],
-.stButton > button[aria-label="ChatGPT"],
-.stButton > button[aria-label="Gemini"],
-.stButton > button[aria-label="Perplexity"],
-button[aria-label="Claude"],
-button[aria-label="ChatGPT"],
-button[aria-label="Gemini"],
-button[aria-label="Perplexity"] {
-    padding-left: 44px !important;
-    background-repeat: no-repeat !important;
-    background-position: 12px center !important;
-    background-size: 22px 22px, auto !important;
-}
-/* Unselected: brand-colored / official logo on white background */
-.stButton > button:not([kind="primary"])[aria-label="Claude"],
-button:not([kind="primary"])[aria-label="Claude"] {
-    background-image: url('https://cdn.simpleicons.org/anthropic/CC785C') !important;
-}
-.stButton > button:not([kind="primary"])[aria-label="ChatGPT"],
-button:not([kind="primary"])[aria-label="ChatGPT"] {
-    background-image: url('https://cdn.simpleicons.org/chatgpt/74AA9C') !important;
-}
-/* Gemini: official multicolor sparkle logo */
-.stButton > button:not([kind="primary"])[aria-label="Gemini"],
-button:not([kind="primary"])[aria-label="Gemini"] {
-    background-image: url('https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg') !important;
-}
-.stButton > button:not([kind="primary"])[aria-label="Perplexity"],
-button:not([kind="primary"])[aria-label="Perplexity"] {
-    background-image: url('https://cdn.simpleicons.org/perplexity/5436DA') !important;
-}
-/* Selected (primary): white logo layered over gradient */
-.stButton > button[kind="primary"][aria-label="Claude"],
-button[kind="primary"][aria-label="Claude"] {
-    background: url('https://cdn.simpleicons.org/anthropic/ffffff') no-repeat 12px center / 22px 22px,
-                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-}
-.stButton > button[kind="primary"][aria-label="ChatGPT"],
-button[kind="primary"][aria-label="ChatGPT"] {
-    background: url('https://cdn.simpleicons.org/chatgpt/ffffff') no-repeat 12px center / 22px 22px,
-                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-}
-.stButton > button[kind="primary"][aria-label="Gemini"],
-button[kind="primary"][aria-label="Gemini"] {
-    background: url('https://cdn.simpleicons.org/googlegemini/ffffff') no-repeat 12px center / 22px 22px,
-                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-}
-.stButton > button[kind="primary"][aria-label="Perplexity"],
-button[kind="primary"][aria-label="Perplexity"] {
-    background: url('https://cdn.simpleicons.org/perplexity/ffffff') no-repeat 12px center / 22px 22px,
-                linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-}
+/* ── LLM selector — logos injected via JavaScript (see _inject_llm_logos) ── */
+/* Left-pad all LLM buttons so JS-injected background logos don't overlap text */
+button[kind="primary"], button[kind="secondary"] { transition: all 0.18s ease !important; }
 
 /* ── Progress bar ──────────────────────── */
 div[data-testid="stProgress"] > div {
@@ -366,6 +315,94 @@ def _llm_badge():
 
 
 # ---------------------------------------------------------------------------
+# Intent detection + image-specific output format question
+# ---------------------------------------------------------------------------
+
+_IMAGE_KEYWORDS = frozenset([
+    "draw", "paint", "illustrate", "generate an image", "create a picture",
+    "sketch", "render", "design an image", "create image", "make an image",
+    "generate image", "create a drawing", "make a drawing", "make a picture",
+    "create an illustration", "produce an image", "make me an image",
+])
+
+
+def _is_image_intent(raw_prompt: str) -> bool:
+    """Return True if the prompt is asking for image / visual art generation."""
+    lower = raw_prompt.lower()
+    return any(kw in lower for kw in _IMAGE_KEYWORDS)
+
+
+_IMAGE_FORMAT_QUESTION = {
+    "component": "desired_output_format",
+    "question": "What visual style and format should the generated image be in?",
+    "inferred_example": (
+        "Art style: photorealistic photograph, warm natural lighting\n"
+        "Aspect ratio: 16:9 landscape (or 1:1 square for social media use)\n"
+        "Color palette: warm earthy tones with a golden-hour atmosphere\n"
+        "Detail level: highly detailed, sharp focus throughout\n"
+        "Camera angle: medium shot, eye-level or slightly low angle\n"
+        "Mood: playful and lighthearted — expressive, emotive subject"
+    ),
+    "placeholder": (
+        "e.g., Photorealistic · Cartoon / anime · Oil painting · "
+        "Aspect ratio 16:9 · Watercolor · Black and white"
+    ),
+}
+
+
+# ---------------------------------------------------------------------------
+# Logo injection — JavaScript via component iframe
+# ---------------------------------------------------------------------------
+
+_LOGO_JS = """
+<style>html,body{margin:0;padding:0;height:0;overflow:hidden}</style>
+<script>
+(function() {
+    var unsel = {
+        'Claude':     'https://cdn.simpleicons.org/anthropic/CC785C',
+        'ChatGPT':    'https://cdn.simpleicons.org/chatgpt/74AA9C',
+        'Gemini':     'https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg',
+        'Perplexity': 'https://cdn.simpleicons.org/perplexity/5436DA'
+    };
+    var sel = {
+        'Claude':     'https://cdn.simpleicons.org/anthropic/ffffff',
+        'ChatGPT':    'https://cdn.simpleicons.org/chatgpt/ffffff',
+        'Gemini':     'https://cdn.simpleicons.org/googlegemini/ffffff',
+        'Perplexity': 'https://cdn.simpleicons.org/perplexity/ffffff'
+    };
+    function applyLogos() {
+        try {
+            var doc = window.parent.document;
+            doc.querySelectorAll('button').forEach(function(btn) {
+                var text = (btn.innerText || btn.textContent || '').trim();
+                if (!unsel[text]) return;
+                var isPrimary = btn.getAttribute('kind') === 'primary';
+                var url = isPrimary ? sel[text] : unsel[text];
+                btn.style.setProperty('padding-left', '44px', 'important');
+                btn.style.setProperty('background-image', 'url(' + url + ')', 'important');
+                btn.style.setProperty('background-repeat', 'no-repeat', 'important');
+                btn.style.setProperty('background-position', '12px center', 'important');
+                btn.style.setProperty('background-size', '22px 22px', 'important');
+            });
+        } catch(e) {}
+    }
+    applyLogos();
+    // Re-apply after any DOM change (Streamlit rerenders wipe inline styles)
+    new MutationObserver(applyLogos).observe(
+        window.parent.document.body,
+        {childList: true, subtree: true}
+    );
+})();
+</script>
+"""
+
+
+def _inject_llm_logos():
+    """Inject LLM brand logos into selector buttons via a 0px component iframe."""
+    components.html(_LOGO_JS, height=0, scrolling=False)
+
+
+# ---------------------------------------------------------------------------
 # Stage 1 — Input
 # ---------------------------------------------------------------------------
 
@@ -407,7 +444,6 @@ def render_input():
     for col, llm in zip(cols, LLM_PROFILES.keys()):
         with col:
             is_sel = st.session_state.target_llm == llm
-            # Logo is injected via CSS background-image using aria-label selector
             st.button(
                 llm,
                 key=f"llm_btn_{llm}",
@@ -416,6 +452,9 @@ def render_input():
                 on_click=_set_llm,
                 args=(llm,),
             )
+    # Inject brand logos into the buttons via JavaScript (CSS aria-label selectors
+    # are unreliable in Streamlit — JS finds buttons by text content instead)
+    _inject_llm_logos()
     st.caption(f"**Style:** {LLM_PROFILES[st.session_state.target_llm]['style_hint']}")
 
     st.divider()
@@ -569,8 +608,14 @@ def render_analysis():
                     except Exception as e:
                         st.error(_safe_api_error(e))
                         st.stop()
-                # Always prepend the output format question first
-                all_questions = [_OUTPUT_FORMAT_QUESTION] + questions
+                # Prepend an output format question — visual-style for image prompts,
+                # written-report template for text/chat prompts
+                fmt_q = (
+                    _IMAGE_FORMAT_QUESTION
+                    if _is_image_intent(st.session_state.raw_prompt)
+                    else _OUTPUT_FORMAT_QUESTION
+                )
+                all_questions = [fmt_q] + questions
                 st.session_state.questions = all_questions
                 st.session_state.current_q = 0
                 st.session_state.answers = {}
